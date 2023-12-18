@@ -1,0 +1,301 @@
+<html>
+<head>
+	<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+	<script src="/vendor/javascript-surface-plot/SurfacePlot.js"></script>
+	<script src="/vendor/javascript-surface-plot/ColourGradient.js"></script>
+
+	<style>
+table, th, td {
+  border: 1px solid black;
+  border-collapse: collapse;
+}
+table {
+  text-align: center;
+}
+	</style>
+</head>
+<body>
+	<h1>Boiling/Cooling time for soft-boiled eggs</h1>
+	<pre id="info" style="color: red;"></pre>
+
+	<div id="inputs-div">
+		<label for="egg-initial-temperature">Egg initial temperature (℃): </label><input id="egg-initial-temperature" value="63" style="width: 3em;">
+		<div>
+			<span>Egg final temperature range (℃): </span>
+			<label for="egg-final-temperature-start">Start</label><input id="egg-final-temperature-start" value="8" style="width: 3em;">
+			<label for="egg-final-temperature-end">End</label><input id="egg-final-temperature-end" value="16" style="width: 3em;">
+		</div>
+		<label for="water-temperature">Water temperature (℃)</label><input id="water-temperature" value="4" style="width: 3em;">
+	</div>
+
+	<div id="plot-3d"></div>
+	<table>
+		<thead></thead>
+		<tbody></tbody>
+	</table>
+
+	<div>
+		<h3>Reference:</h3>
+		<div><a href="https://newton.ex.ac.uk/teaching/CDHW/egg/">The Science of Boiling an Egg</a>, by Charles D. H. Williams, University of Exeter</div>
+		<div><a href="https://www.airitilibrary.com/Article/Detail/10190430-199609-5-3-67-78-a">水煮蛋蒸煮與剝殼機械之研發</a>, by 雷鵬魁(Perng-Kwei Lei), 《農業機械學刊》 5卷3期 (1996/09) Pp. 67-78</div>
+	</div>
+</body>
+	<script>
+function getTestData() {
+	let numRows = 45;
+	let numCols = 45;
+	let data = [];
+	for (var i = 0; i < numRows; i++) {
+		let row = [];
+        	for (var j = 0; j < numCols; j++) {
+			let d = 360 / numRows;
+            		let z = (Math.cos(i * d * Math.PI / 180.0) * Math.cos(j * d * Math.PI / 180.0));
+			let datum = {x: j, y: i, z: z};
+			row.push(datum);
+		}
+		data.push(row);
+	}
+	return data;
+}
+
+function plot(div, data, opts) {
+    let [minZ, maxZ] = [Number.MAX_VALUE, -Number.MAX_VALUE];
+    for (let i = 0; i < data.length; i++) {
+        for (var j = 0; j < data[i].length; j++) {
+           let d = data[i][j];
+
+           minZ = Math.min(d.z, minZ);
+           maxZ = Math.max(d.z, maxZ);
+	}
+    }
+    if (opts.zRange) {
+      [minZ, maxZ] = opts.zRange;
+    }
+
+    let dataObj = {
+        values: [],
+        getNumberOfRows: function () {
+            return data.length;
+        },
+        getNumberOfColumns: function () {
+            return data[0].length;
+        },
+        getFormattedValue: function (i, j) {
+            return this.values[i][j];
+        }
+    };
+    let tooltipStrings = new Array();
+    let idx = 0;
+    for (let i = 0; i < data.length; i++) {
+	let row = [];
+        for (var j = 0; j < data[i].length; j++) {
+            let d = data[i][j];
+
+            let normedZ = ((d.z-minZ) / (maxZ-minZ) - 0.5) * 0.5;
+	    row.push(normedZ);
+            tooltipStrings[idx] = "x:" + d.x + ", y:" + d.y + " = " + d.z;
+	    if (opts.tooltip) {
+                tooltipStrings[idx] = opts.tooltip(d);
+            }
+            idx++;
+        }
+	dataObj.values.push(row);
+    }
+
+    var surfacePlot = new greg.ross.visualisation.SurfacePlot(div);
+
+    // Don't fill polygons in IE. It's too slow.
+    var fillPly = true;
+
+    // Define a colour gradient.
+    var colour1 = {
+        red: 0,
+        green: 0,
+        blue: 255
+    };
+    var colour2 = {
+        red: 0,
+        green: 255,
+        blue: 255
+    };
+    var colour3 = {
+        red: 0,
+        green: 255,
+        blue: 0
+    };
+    var colour4 = {
+        red: 255,
+        green: 255,
+        blue: 0
+    };
+    var colour5 = {
+        red: 255,
+        green: 0,
+        blue: 0
+    };
+    var colours = [colour1, colour2, colour3, colour4, colour5];
+
+    // Axis labels.
+    var xAxisHeader = "X";
+    if (Object.hasOwn(opts, "xAxisHeader")) {
+      xAxisHeader = opts.xAxisHeader;
+    }
+    var yAxisHeader = "Y";
+    if (Object.hasOwn(opts, "yAxisHeader")) {
+      yAxisHeader = opts.yAxisHeader;
+    }
+    var zAxisHeader = "Z";
+    if (Object.hasOwn(opts, "zAxisHeader")) {
+      zAxisHeader = opts.zAxisHeader;
+    }
+
+    var options = {
+        xPos: 0,
+        yPos: 0,
+        width: opts.width,
+        height: opts.height,
+        colourGradient: colours,
+        fillPolygons: fillPly,
+        tooltips: tooltipStrings,
+        xTitle: xAxisHeader,
+        yTitle: yAxisHeader,
+        zTitle: zAxisHeader,
+        restrictXRotation: false
+    };
+
+    surfacePlot.draw(dataObj, options);
+}
+
+function getData() {
+	let initT = parseFloat(document.querySelector("#egg-initial-temperature").value);
+	let finalTStart = parseInt(document.querySelector("#egg-final-temperature-start").value);
+	let finalTEnd = parseInt(document.querySelector("#egg-final-temperature-end").value);
+	let waterT = parseFloat(document.querySelector("#water-temperature").value);
+
+	if (!(finalTStart < finalTEnd)) {
+		return [null, `final temperature start s${finalTStart} should be smaller than final temperature end ${finalTEnd}`];
+	}
+	if (finalTEnd > initT) {
+		if (!(waterT > finalTEnd)) {
+			return [null, `water temperature ${waterT} should be higher than final temperature ${finalTEnd} during boiling`];
+		}
+	} else {
+		if (!(waterT < finalTEnd)) {
+			return [null, `water temperature ${waterT} should be lower than final temperature ${finalTEnd} during cooling`];
+		}
+	}
+
+	let data = [];
+	for (let finalT = finalTStart; finalT <= finalTEnd; finalT += 0.5) {
+		let row = [];
+		for (let weight = 45; weight <= 70; weight += 1) {
+			let z = 27*Math.pow(weight, 2/3)*Math.log(0.76*(initT-waterT)/(finalT-waterT));
+
+			let d = {x: weight, y: finalT, z: z};
+			row.push(d);
+		}
+		data.push(row);
+	}
+	return [data, ""];
+}
+
+function formatSeconds(seconds) {
+	let minutes = Math.floor(seconds / 60);
+	let secs = Math.round(seconds % 60);
+	return String(minutes).padStart(2, "0")+":"+String(secs).padStart(2, "0");
+}
+
+function updateTable(data) {
+	// Header.
+	let thead = document.querySelector("thead");
+	thead.innerHTML = "";
+	let headTr = document.createElement("tr");
+	thead.appendChild(headTr);
+	let th = document.createElement("th");
+	headTr.appendChild(th);
+	th.textContent = "T(℃) \\ Weight(g)";
+	for (let i = 0; i < data[0].length; i++) {
+		let d = data[0][i];
+
+		let th = document.createElement("th");
+		headTr.appendChild(th);
+		th.textContent = d.x;
+	}
+
+	// Body.
+	let tbody = document.querySelector("tbody");
+	tbody.innerHTML = "";
+	for (let i = 0; i < data.length; i++) {
+		let tr = document.createElement("tr");
+		tbody.appendChild(tr);
+		let td = document.createElement("td");
+		tr.appendChild(td);
+		td.textContent = data[i][0].y;
+		for (let j = 0; j < data[i].length; j++) {
+			let d = data[i][j];
+
+			let td = document.createElement("td");
+			tr.appendChild(td);
+			td.textContent = formatSeconds(d.z);
+		}
+	}
+}
+
+function updatePlot() {
+	let [data, err] = getData();
+	if (err) {
+		document.querySelector("#info").textContent = err;
+		return;
+	}
+
+	// Plot 3d.
+	let opts = {
+		xAxisHeader: "Egg final temperature (°C)",
+		yAxisHeader: "Egg weight (g)",
+		zAxisHeader: "Boiling time (s)",
+	};
+	opts.tooltip = function(d) {
+		return "Egg weight: "+d.x+"\n"+"Final temperature: "+d.y+"\n"+"Boiling time: "+formatSeconds(d.z);
+	};
+	let w = Math.min(document.body.clientHeight*0.75, document.body.clientWidth);
+	opts.width = w;
+	opts.height = w;
+	let div = document.querySelector("#plot-3d");
+	div.innerHTML = "";
+	plot(div, data, opts);
+
+	// Show table.
+	updateTable(data);
+	document.querySelector("#info").textContent = "";
+}
+
+function mobileFriendly() {
+	if (document.body.clientHeight < document.body.clientWidth) {
+		return;
+	}
+
+	document.querySelector("#inputs-div").style["font-size"] = "xxx-large";
+	let inputs = document.querySelectorAll("#inputs-div input");
+	for (let i = 0; i < inputs.length; i++) {
+		let inputElm = inputs[i];
+		inputElm.style["font-size"] = "xxx-large";
+	}
+}
+
+function main() {
+	mobileFriendly();
+
+	let inputs = document.querySelectorAll("input");
+	for (let i = 0; i < inputs.length; i++) {
+		let input = inputs[i];
+		input.addEventListener("change", function(ev){
+			updatePlot();
+		});
+	}
+
+	updatePlot();
+}
+
+main();
+	</script>
+</html>
